@@ -172,7 +172,8 @@
     void vAssertCalled( const char * pcFile,
                         uint32_t ulLine );
 
-    #define configASSERT( x )    if( ( x ) == 0 ) TEST_ABORT()
+    #define configASSERT( x )    if( ( x ) == 0 ) {  printf("ASSERTERROR\n"); vAssertCalled( __FILE__, __LINE__ ); for(;;){;} } //
+
 
 /* The function that implements FreeRTOS printf style output, and the macro
  * that maps the configPRINTF() macros to that function. */
@@ -244,11 +245,11 @@
  * tasks:
  * http://www.freertos.org/FreeRTOS-Plus/FreeRTOS_Plus_TCP/TCP_Echo_Clients.html,
  * http://www.freertos.org/FreeRTOS-Plus/FreeRTOS_Plus_TCP/UDP_Echo_Clients.html. */
-    #define configECHO_SERVER_ADDR0              192
-    #define configECHO_SERVER_ADDR1              168
-    #define configECHO_SERVER_ADDR2              0
-    #define configECHO_SERVER_ADDR3              105
-    #define configTCP_ECHO_CLIENT_PORT           45000
+    #define configECHO_SERVER_ADDR0              10
+    #define configECHO_SERVER_ADDR1              184
+    #define configECHO_SERVER_ADDR2              155
+    #define configECHO_SERVER_ADDR3              242
+    #define configTCP_ECHO_CLIENT_PORT           8883
 
 /* Default MAC address configuration.  The demo creates a virtual network
  * connection that uses this MAC address by accessing the raw Ethernet/WiFi data
@@ -260,7 +261,7 @@
     #define configMAC_ADDR2                      0x22
     #define configMAC_ADDR3                      0x33
     #define configMAC_ADDR4                      0x44
-    #define configMAC_ADDR5                      0x21
+    #define configMAC_ADDR5                      0x96
 
 /* Default IP address configuration.  Used in ipconfigUSE_DHCP is set to 0, or
  * ipconfigUSE_DHCP is set to 1 but a DNS server cannot be contacted. */
@@ -335,6 +336,8 @@
 
     #endif /* ifdef NETWORK_NOTIFY_RELEASED_PACKETS */
 
+    /* The platform has UDp socket layer implemented */
+    #define configPLATFORM_SOCKET_UDP_SUPPORT   ( 1 )
 
     #ifdef __cplusplus
         } /*extern "C" */

@@ -56,6 +56,7 @@
 #define SS_STATUS_CONNECTED    ( 1 )
 #define SS_STATUS_SECURED      ( 2 )
 
+
 /*
  * secure socket context.
  */
@@ -272,12 +273,12 @@ Socket_t SOCKETS_Socket( int32_t lDomain,
     ss_ctx_t * ctx;
 
     configASSERT( lDomain == SOCKETS_AF_INET );
-    configASSERT( lType == SOCKETS_SOCK_STREAM );
-    configASSERT( lProtocol == SOCKETS_IPPROTO_TCP );
+    configASSERT( ( lType == SOCKETS_SOCK_STREAM ) || ( lType == SOCKETS_SOCK_DGRAM ) );
+    configASSERT( ( lProtocol == SOCKETS_IPPROTO_TCP ) || ( lProtocol == SOCKETS_IPPROTO_UDP ) );
 
     if( ( lDomain != SOCKETS_AF_INET ) ||
-        ( lType != SOCKETS_SOCK_STREAM ) ||
-        ( lProtocol != SOCKETS_IPPROTO_TCP ) ||
+        ( ( lType != SOCKETS_SOCK_STREAM ) && ( lType != SOCKETS_SOCK_DGRAM ) ) ||
+        ( ( lProtocol != SOCKETS_IPPROTO_TCP ) && ( lProtocol != SOCKETS_IPPROTO_UDP ) ) ||
         ( sockets_allocated <= 0 )
         )
     {
@@ -301,6 +302,7 @@ Socket_t SOCKETS_Socket( int32_t lDomain,
         vPortFree( ctx );
     }
 
+    /* printf( "lwip_ss/SOCKETS_Socket: invalid socket\n"); */
     return ( Socket_t ) SOCKETS_INVALID_SOCKET;
 }
 
@@ -485,6 +487,104 @@ int32_t SOCKETS_Send( Socket_t xSocket,
 
 /*-----------------------------------------------------------*/
 
+int32_t SOCKETS_Bind( Socket_t xSocket,
+                      const SocketsSockaddr_t * pxAddress,
+                      Socklen_t xAddressLength )
+{
+    int32_t lStatus = SOCKETS_SOCKET_ERROR;
+    ss_ctx_t * ctx = ( ss_ctx_t * ) xSocket;
+    struct sockaddr_in sa_addr = { 0 };
+
+    if( ( ctx != NULL ) && ( ctx != SOCKETS_INVALID_SOCKET ) && ( pxAddress != NULL ) )
+    {
+        sa_addr.sin_family = pxAddress->ucSocketDomain ? pxAddress->ucSocketDomain : AF_INET;
+        sa_addr.sin_addr.s_addr = pxAddress->ulAddress;
+        sa_addr.sin_port = pxAddress->usPort;
+
+        lStatus = lwip_bind( ctx->ip_socket, ( struct sockaddr * ) &sa_addr, sizeof( sa_addr ) );
+    }
+
+    return lStatus;
+}
+
+/*-----------------------------------------------------------*/
+
+int32_t SOCKETS_SendTo( Socket_t xSocket,
+                        const void * pvBuffer,
+                        size_t xDataLength,
+                        uint32_t ulFlags,
+                        const SocketsSockaddr_t * pxAddress,
+                        Socklen_t xAddressLength )
+{
+    if( SOCKETS_INVALID_SOCKET == xSocket )
+    {
+        return SOCKETS_SOCKET_ERROR;
+    }
+
+    if( ( NULL == pvBuffer ) || ( 0 == xDataLength ) || ( pxAddress == NULL ) )
+    {
+        return SOCKETS_EINVAL;
+    }
+
+    int32_t lStatus = SOCKETS_SOCKET_ERROR;
+    ss_ctx_t * ctx = ( ss_ctx_t * ) xSocket;
+    struct sockaddr_in sa_addr = { 0 };
+
+    if( ( ctx != SOCKETS_INVALID_SOCKET ) && ( pxAddress != NULL ) )
+    {
+        /* sa_addr.sin_family      = pxAddress->ucSocketDomain; */
+        sa_addr.sin_family = AF_INET;
+        sa_addr.sin_addr.s_addr = pxAddress->ulAddress;
+        sa_addr.sin_port = pxAddress->usPort;
+        ctx->send_flag = ulFlags;
+        lStatus = lwip_sendto( ctx->ip_socket, pvBuffer, xDataLength, ctx->send_flag, ( struct sockaddr * ) &sa_addr, sizeof( sa_addr ) );
+    }
+
+    return lStatus;
+}
+
+/*-----------------------------------------------------------*/
+
+int32_t SOCKETS_RecvFrom( Socket_t xSocket,
+                          void * pvBuffer,
+                          size_t xDataLength,
+                          uint32_t ulFlags,
+                          SocketsSockaddr_t * pxAddress,
+                          Socklen_t * xAddressLength )
+{
+    if( SOCKETS_INVALID_SOCKET == xSocket )
+    {
+        return SOCKETS_SOCKET_ERROR;
+    }
+
+    int32_t lStatus = SOCKETS_SOCKET_ERROR;
+    ss_ctx_t * ctx = ( ss_ctx_t * ) xSocket;
+    struct sockaddr_in sa_addr = { 0 };
+    BaseType_t xFlags = 0;
+    uint32_t ulAddressLength = sizeof( sa_addr );
+
+    if( ulFlags & SOCKETS_MSG_PEEK )
+    {
+        xFlags |= MSG_PEEK;
+    }
+
+    if( ( ctx != SOCKETS_INVALID_SOCKET ) && ( pxAddress != NULL ) )
+    {
+        ctx->send_flag = xFlags;
+        lStatus = lwip_recvfrom( ctx->ip_socket, pvBuffer, xDataLength, ctx->send_flag, ( struct sockaddr * ) &sa_addr, &ulAddressLength );
+
+        pxAddress->ulAddress = sa_addr.sin_addr.s_addr;
+        pxAddress->ucSocketDomain = sa_addr.sin_family;
+        pxAddress->ucLength = ( uint8_t ) sizeof( *pxAddress );
+        pxAddress->usPort = sa_addr.sin_port;
+        *xAddressLength = sizeof( SocketsSockaddr_t );
+    }
+
+    return lStatus;
+}
+
+/*-----------------------------------------------------------*/
+
 int32_t SOCKETS_Shutdown( Socket_t xSocket,
                           uint32_t ulHow )
 {
@@ -528,7 +628,6 @@ int32_t SOCKETS_Close( Socket_t xSocket )
 
     ctx = ( ss_ctx_t * ) xSocket;
 
-    /* Clean-up application protocol array. */
     if( NULL != ctx->ppcAlpnProtocols )
     {
         for( ulProtocol = 0;
