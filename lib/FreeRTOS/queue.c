@@ -1,6 +1,6 @@
 /*
- * FreeRTOS Kernel V10.1.1
- * Copyright (C) 2018 Amazon.com, Inc. or its affiliates.  All Rights Reserved.
+ * FreeRTOS Kernel V10.2.0
+ * Copyright (C) 2019 Amazon.com, Inc. or its affiliates.  All Rights Reserved.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy of
  * this software and associated documentation files (the "Software"), to deal in
@@ -49,8 +49,9 @@ correct privileged Vs unprivileged linkage and placement. */
 
 
 /* Constants used with the cRxLock and cTxLock structure members. */
-#define queueUNLOCKED					( ( int8_t ) -1 )
-#define queueLOCKED_UNMODIFIED			( ( int8_t ) 0 )
+#define queueUNLOCKED                          ( ( int8_t ) -1 )
+#define queueLOCKED_UNMODIFIED                 ( ( int8_t ) 0 )
+#define queueINT8_MAX                          ( ( int8_t ) 127 )
 
 /* When the Queue_t structure is used to represent a base queue its pcHead and
 pcTail members are used as pointers into the queue storage area.  When the
@@ -94,7 +95,7 @@ zero. */
  * Items are queued by copy, not reference.  See the following link for the
  * rationale: https://www.freertos.org/Embedded-RTOS-Queues.html
  */
-typedef struct QueueDefinition /* The old naming convention is used to prevent breaking kernel aware debuggers. */
+typedef struct QueueDefinition 		/* The old naming convention is used to prevent breaking kernel aware debuggers. */
 {
 	int8_t *pcHead;					/*< Points to the beginning of the queue storage area. */
 	int8_t *pcWriteTo;				/*< Points to the free next place in the storage area. */
@@ -385,6 +386,11 @@ Queue_t * const pxQueue = xQueue;
 			xQueueSizeInBytes = ( size_t ) ( uxQueueLength * uxItemSize ); /*lint !e961 MISRA exception as the casts are only redundant for some ports. */
 		}
 
+		/* Check for multiplication overflow. */
+		configASSERT( ( uxItemSize == 0 ) || ( uxQueueLength == ( xQueueSizeInBytes / uxItemSize ) ) );
+
+		/* Check for addition overflow. */
+		configASSERT( ( sizeof( Queue_t ) + xQueueSizeInBytes ) > xQueueSizeInBytes );
 		/* Allocate the queue and storage area.  Justification for MISRA
 		deviation as follows:  pvPortMalloc() always ensures returned memory
 		blocks are aligned per the requirements of the MCU stack.  In this case
@@ -1088,6 +1094,8 @@ Queue_t * const pxQueue = xQueue;
 			{
 				/* Increment the lock count so the task that unlocks the queue
 				knows that data was posted while it was locked. */
+				configASSERT( cTxLock != queueINT8_MAX );
+
 				pxQueue->cTxLock = ( int8_t ) ( cTxLock + 1 );
 			}
 
@@ -1253,6 +1261,8 @@ Queue_t * const pxQueue = xQueue;
 			{
 				/* Increment the lock count so the task that unlocks the queue
 				knows that data was posted while it was locked. */
+				configASSERT( cTxLock != queueINT8_MAX );
+
 				pxQueue->cTxLock = ( int8_t ) ( cTxLock + 1 );
 			}
 
@@ -1416,6 +1426,8 @@ BaseType_t xQueueSemaphoreTake( QueueHandle_t xQueue, TickType_t xTicksToWait )
 BaseType_t xEntryTimeSet = pdFALSE;
 TimeOut_t xTimeOut;
 Queue_t * const pxQueue = xQueue;
+void *pvBuffer = NULL;
+(void)pvBuffer;
 
 #if( configUSE_MUTEXES == 1 )
 	BaseType_t xInheritanceOccurred = pdFALSE;
@@ -1852,6 +1864,8 @@ Queue_t * const pxQueue = xQueue;
 			{
 				/* Increment the lock count so the task that unlocks the queue
 				knows that data was removed while it was locked. */
+				configASSERT( cRxLock != queueINT8_MAX );
+
 				pxQueue->cRxLock = ( int8_t ) ( cRxLock + 1 );
 			}
 
@@ -2915,6 +2929,8 @@ Queue_t * const pxQueue = xQueue;
 			}
 			else
 			{
+				configASSERT( cTxLock != queueINT8_MAX );
+
 				pxQueueSetContainer->cTxLock = ( int8_t ) ( cTxLock + 1 );
 			}
 		}

@@ -1,6 +1,6 @@
 /*
- * FreeRTOS Kernel V10.1.1
- * Copyright (C) 2018 Amazon.com, Inc. or its affiliates.  All Rights Reserved.
+ * FreeRTOS Kernel V10.2.0
+ * Copyright (C) 2019 Amazon.com, Inc. or its affiliates.  All Rights Reserved.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy of
  * this software and associated documentation files (the "Software"), to deal in
@@ -133,19 +133,29 @@ void *pvReturn = NULL;
 
 		/* The wanted size is increased so it can contain a BlockLink_t
 		structure in addition to the requested amount of bytes. */
-		if( xWantedSize > 0 )
+		if( ( xWantedSize > 0 ) &&
+			( ( xWantedSize + heapSTRUCT_SIZE ) >  xWantedSize ) ) /* Overflow check */
 		{
 			xWantedSize += heapSTRUCT_SIZE;
 
-			/* Ensure that blocks are always aligned to the required number of bytes. */
-			if( ( xWantedSize & portBYTE_ALIGNMENT_MASK ) != 0 )
+			/* Byte alignment required. Check for overflow. */
+			if( ( xWantedSize + ( portBYTE_ALIGNMENT - ( xWantedSize & portBYTE_ALIGNMENT_MASK ) ) )
+					> xWantedSize )
 			{
-				/* Byte alignment required. */
 				xWantedSize += ( portBYTE_ALIGNMENT - ( xWantedSize & portBYTE_ALIGNMENT_MASK ) );
+				configASSERT( ( xWantedSize & portBYTE_ALIGNMENT_MASK ) == 0 );
+			}
+			else
+			{
+				xWantedSize = 0;
 			}
 		}
+		else
+		{
+			xWantedSize = 0;
+		}
 
-		if( ( xWantedSize > 0 ) && ( xWantedSize < configADJUSTED_HEAP_SIZE ) )
+		if( ( xWantedSize > 0 ) && ( xWantedSize <= xFreeBytesRemaining ) )
 		{
 			/* Blocks are stored in byte order - traverse the list from the start
 			(smallest) block until one of adequate size is found. */

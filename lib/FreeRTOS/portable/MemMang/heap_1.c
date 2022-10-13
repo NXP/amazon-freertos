@@ -1,6 +1,6 @@
 /*
- * FreeRTOS Kernel V10.1.1
- * Copyright (C) 2018 Amazon.com, Inc. or its affiliates.  All Rights Reserved.
+ * FreeRTOS Kernel V10.2.0
+ * Copyright (C) 2019 Amazon.com, Inc. or its affiliates.  All Rights Reserved.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy of
  * this software and associated documentation files (the "Software"), to deal in
@@ -76,8 +76,15 @@ static uint8_t *pucAlignedHeap = NULL;
 	{
 		if( xWantedSize & portBYTE_ALIGNMENT_MASK )
 		{
-			/* Byte alignment required. */
-			xWantedSize += ( portBYTE_ALIGNMENT - ( xWantedSize & portBYTE_ALIGNMENT_MASK ) );
+			/* Byte alignment required. Check for overflow. */
+			if ( (xWantedSize + ( portBYTE_ALIGNMENT - ( xWantedSize & portBYTE_ALIGNMENT_MASK ) )) > xWantedSize )
+			{
+				xWantedSize += ( portBYTE_ALIGNMENT - ( xWantedSize & portBYTE_ALIGNMENT_MASK ) );
+			}
+			else
+			{
+				xWantedSize = 0;
+			}
 		}
 	}
 	#endif
@@ -91,7 +98,8 @@ static uint8_t *pucAlignedHeap = NULL;
 		}
 
 		/* Check there is enough room left for the allocation. */
-		if( ( ( xNextFreeByte + xWantedSize ) < configADJUSTED_HEAP_SIZE ) &&
+		if( ( xWantedSize > 0 ) && /* valid size */
+			( ( xNextFreeByte + xWantedSize ) < configADJUSTED_HEAP_SIZE ) &&
 			( ( xNextFreeByte + xWantedSize ) > xNextFreeByte )	)/* Check for overflow. */
 		{
 			/* Return the next free byte then increment the index past this
