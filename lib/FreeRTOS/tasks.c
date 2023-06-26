@@ -75,7 +75,7 @@ functions but without including stdio.h here. */
  */
 #define tskSTACK_FILL_BYTE	( 0xa5U )
 
-/* Bits used to recored how a task's stack and TCB were allocated. */
+/* Bits used to record how a task's stack and TCB were allocated. */
 #define tskDYNAMICALLY_ALLOCATED_STACK_AND_TCB 		( ( uint8_t ) 0 )
 #define tskSTATICALLY_ALLOCATED_STACK_ONLY 			( ( uint8_t ) 1 )
 #define tskSTATICALLY_ALLOCATED_STACK_AND_TCB		( ( uint8_t ) 2 )
@@ -767,7 +767,12 @@ static void prvAddNewTaskToReadyList( TCB_t *pxNewTCB ) PRIVILEGED_FUNCTION;
 		StackType_t *pxStack;
 
 			/* Allocate space for the stack used by the task being created. */
+#if (configSUPPORT_STACK_UNRETAINED == 1)
+            extern StackType_t* pvApplicationGetTaskStackMemory(size_t TaskStackSize, int is_idle_task);
+            pxStack = pvApplicationGetTaskStackMemory(  ( ( size_t ) usStackDepth ) * sizeof( StackType_t ), (uxPriority == 0) ? 1 : 0);
+#else
 			pxStack = pvPortMalloc( ( ( ( size_t ) usStackDepth ) * sizeof( StackType_t ) ) ); /*lint !e9079 All values returned by pvPortMalloc() have at least the alignment required by the MCU's stack and this allocation is the stack. */
+#endif
 
 			if( pxStack != NULL )
 			{
@@ -806,6 +811,16 @@ static void prvAddNewTaskToReadyList( TCB_t *pxNewTCB ) PRIVILEGED_FUNCTION;
 			prvInitialiseNewTask( pxTaskCode, pcName, ( uint32_t ) usStackDepth, pvParameters, uxPriority, pxCreatedTask, pxNewTCB, NULL );
 			prvAddNewTaskToReadyList( pxNewTCB );
 			xReturn = pdPASS;
+#if (configSUPPORT_STACK_UNRETAINED == 1)
+            extern void vApplicationRegisterNewTaskHandleAndStack(
+            		void *tsk_hdl,
+            		StackType_t  *stack_base,
+            		size_t       stack_depth);
+            if (uxPriority != 0)
+            {
+            	vApplicationRegisterNewTaskHandleAndStack((void*)pxNewTCB, pxNewTCB->pxStack, usStackDepth);
+            }
+#endif
 		}
 		else
 		{
